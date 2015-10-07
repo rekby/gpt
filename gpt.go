@@ -16,7 +16,7 @@ type Header struct {
 	Signature              [8]byte  // Offset  0. "EFI PART"
 	Revision               uint32   // Offset  8
 	Size                   uint32   // Offset 12
-	CRC                    uint32   // Offset 16
+	CRC                    uint32   // Offset 16. Autocalc when save Header.
 	Reserved               uint32   // Offset 20
 	HeaderStartLBA         uint64   // Offset 24
 	HeaderCopyStartLBA     uint64   // Offset 32
@@ -26,7 +26,7 @@ type Header struct {
 	PartitionsTableStartLBA uint64   // Offset 72
 	PartitionsArrLen       uint32   // Offset 80
 	PartitionEntrySize     uint32   // Offset 84
-	PartitionsCRC          uint32   // Offset 88
+	PartitionsCRC          uint32   // Offset 88. Autocalc when save Table.
 	TrailingBytes          []byte   // Offset 92
 }
 
@@ -77,9 +77,10 @@ func readHeader(reader io.Reader, sectorSize uint32) (res Header, err error) {
 		return
 	}
 
-	if res.Size < standardHeaderSize || res.Size > sectorSize {
-		return res, fmt.Errorf("Strange header size field: %v bytes", res.Size)
+	if string(res.Signature[:]) != "EFI PART" {
+		return res, fmt.Errorf("Bad GPT signature")
 	}
+
 	trailingBytes := make([]byte, sectorSize-standardHeaderSize)
 	reader.Read(trailingBytes)
 	res.TrailingBytes = trailingBytes
@@ -88,7 +89,7 @@ func readHeader(reader io.Reader, sectorSize uint32) (res Header, err error) {
 		return res, fmt.Errorf("BAD GPT Header CRC")
 	}
 
-	return res, nil
+	return
 }
 
 func (this *Header) calcCRC() uint32 {
@@ -185,6 +186,9 @@ func (this Partition) IsEmpty() bool {
 ////////////////// TABLE /////////////////////
 //////////////////////////////////////////////
 
+
+// Read GPT partition
+// Have to set to first byte of GPT Header (usually start of second sector on disk)
 func ReadTable(reader io.ReadSeeker, SectorSize uint32) (table Table, err error) {
 	table.SectorSize = SectorSize
 	table.Header, err = readHeader(reader, SectorSize)
@@ -221,7 +225,10 @@ func (this Table) calcPartitionsCRC() uint32 {
 	return crc32.ChecksumIEEE(buf.Bytes())
 }
 
+// Calc header and partitions CRC. Save Header and partition entries to the disk.
+// It independent of start position: writer will be seek to position from Table.Header.
 func (this Table) Write(writer io.WriteSeeker) (err error) {
+	this.Header.PartitionsCRC = this.calcPartitionsCRC()
 	if headerPos, ok := mul(int64(this.SectorSize), int64(this.Header.HeaderStartLBA)); ok {
 		writer.Seek(headerPos, 0)
 	}
