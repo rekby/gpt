@@ -8,9 +8,8 @@ import (
 	"io"
 )
 
-const standardHeaderSize = 92          // Размер обычной GPT-структуры в байтах
-const standardPartitionEntrySize = 128 // Размер обычной записи раздела в байтах
-const MAX_INT64 = 9223372036854775807
+const standardHeaderSize = 92          // Size of standard GPT-header in bytes
+const standardPartitionEntrySize = 128 // Size of standard GPT-partition entry in bytes
 
 // https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_table_header_.28LBA_1.29
 type Header struct {
@@ -246,8 +245,8 @@ func (this Table) Write(writer io.WriteSeeker) (err error) {
 //////////////// INTERNALS ///////////////////
 //////////////////////////////////////////////
 
-// Перемножение двух int64-чисел с проверкой на переполнение
-// Алгоритм проверки взят с https://gist.github.com/areed/85d3614a58400e417027
+// Multiply two int64 numbers with overflow check
+// Algorithm from https://gist.github.com/areed/85d3614a58400e417027
 func mul(a, b int64) (res int64, ok bool) {
 	const mostPositive = 1<<63 - 1
 	const mostNegative = -(mostPositive + 1)
