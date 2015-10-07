@@ -31,6 +31,7 @@ type Header struct {
 	TrailingBytes          []byte   // Offset 92
 }
 
+// https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_entries
 type Partition struct {
 	Type          [16]byte // Offset 0
 	PartGUID      [16]byte // Offset 16
