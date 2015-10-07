@@ -42,7 +42,7 @@ type Partition struct {
 }
 
 type Table struct {
-	SectorSize uint32 // Размер сектора в байтах
+	SectorSize uint32 // in bytes
 	Header     Header
 	Partitions []Partition
 }
