@@ -6,37 +6,51 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"unicode/utf16"
 )
 
 const standardHeaderSize = 92          // Size of standard GPT-header in bytes
 const standardPartitionEntrySize = 128 // Size of standard GPT-partition entry in bytes
 
+type Flags [8]byte
+type Guid [16]byte
+
+func (this Guid) String() string {
+	return guidToString(this)
+}
+
+type PartType Guid
+
+func (this PartType) String() string {
+	return guidToString(this)
+}
+
 // https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_table_header_.28LBA_1.29
 type Header struct {
-	Signature              [8]byte  // Offset  0. "EFI PART"
-	Revision               uint32   // Offset  8
-	Size                   uint32   // Offset 12
-	CRC                    uint32   // Offset 16. Autocalc when save Header.
-	Reserved               uint32   // Offset 20
-	HeaderStartLBA         uint64   // Offset 24
-	HeaderCopyStartLBA     uint64   // Offset 32
-	FirstUsableLBA         uint64   // Offset 40
-	LastUsableLBA          uint64   // Offset 48
-	DiskGUID               [16]byte // Offset 56
+	Signature               [8]byte  // Offset  0. "EFI PART", 45h 46h 49h 20h 50h 41h 52h 54h
+	Revision                uint32   // Offset  8
+	Size                    uint32   // Offset 12
+	CRC                     uint32   // Offset 16. Autocalc when save Header.
+	Reserved                uint32   // Offset 20
+	HeaderStartLBA          uint64   // Offset 24
+	HeaderCopyStartLBA      uint64   // Offset 32
+	FirstUsableLBA          uint64   // Offset 40
+	LastUsableLBA           uint64   // Offset 48
+	DiskGUID                Guid // Offset 56
 	PartitionsTableStartLBA uint64   // Offset 72
-	PartitionsArrLen       uint32   // Offset 80
-	PartitionEntrySize     uint32   // Offset 84
-	PartitionsCRC          uint32   // Offset 88. Autocalc when save Table.
-	TrailingBytes          []byte   // Offset 92
+	PartitionsArrLen        uint32   // Offset 80
+	PartitionEntrySize      uint32   // Offset 84
+	PartitionsCRC           uint32   // Offset 88. Autocalc when save Table.
+	TrailingBytes           []byte   // Offset 92
 }
 
 // https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_entries
 type Partition struct {
-	Type          [16]byte // Offset 0
-	PartGUID      [16]byte // Offset 16
+	Type          PartType // Offset 0
+	Id            Guid     // Offset 16
 	FirstLBA      uint64   // Offset 32
 	LastLBA       uint64   // Offset 40
-	Flags         [8]byte  // Offset 68
+	Flags         Flags    // Offset 68
 	PartNameUTF16 [72]byte // Offset 56
 	TrailingBytes []byte   // Offset 128. Usually it is empty
 }
@@ -146,7 +160,7 @@ func readPartition(reader io.Reader, size uint32) (p Partition, err error) {
 	p.TrailingBytes = make([]byte, size-standardPartitionEntrySize)
 
 	read(&p.Type)
-	read(&p.PartGUID)
+	read(&p.Id)
 	read(&p.FirstLBA)
 	read(&p.LastLBA)
 	read(&p.Flags)
@@ -168,7 +182,7 @@ func (this Partition) write(writer io.Writer, size uint32) (err error) {
 	}
 
 	write(this.Type)
-	write(this.PartGUID)
+	write(this.Id)
 	write(this.FirstLBA)
 	write(this.LastLBA)
 	write(this.Flags)
@@ -182,10 +196,18 @@ func (this Partition) IsEmpty() bool {
 	return this.Type == [16]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 }
 
+func (this Partition) Name() string {
+	chars := make([]uint16, 0, 36)
+	for i := 0; i < len(this.PartNameUTF16); i += 2 {
+		chars = append(chars, uint16(this.PartNameUTF16[i])+uint16(this.PartNameUTF16[i+1])<<8)
+	}
+	runes := utf16.Decode(chars)
+	return string(runes)
+}
+
 //////////////////////////////////////////////
 ////////////////// TABLE /////////////////////
 //////////////////////////////////////////////
-
 
 // Read GPT partition
 // Have to set to first byte of GPT Header (usually start of second sector on disk)
@@ -215,6 +237,62 @@ func ReadTable(reader io.ReadSeeker, SectorSize uint32) (table Table, err error)
 		return
 	}
 	return
+}
+
+func (this Table) CreateOtherSideTable() (res Table) {
+	res = this.copy()
+
+	// Copy of table on other side of disk
+	tmpDest := res.Header.HeaderStartLBA
+	res.Header.HeaderStartLBA = res.Header.HeaderCopyStartLBA
+	res.Header.HeaderCopyStartLBA = tmpDest
+
+	if res.Header.HeaderStartLBA == 1 {
+		res.Header.PartitionsTableStartLBA = 2
+	} else {
+		// Partitions table on other side of disk
+		res.Header.PartitionsTableStartLBA = res.Header.LastUsableLBA + 1
+	}
+
+	res.Header.CRC = res.Header.calcCRC()
+	return res
+}
+
+// Create primary table for resized disk
+// size - in sectors
+func (this Table) CreateTableForNewDiskSize(size uint64)(res Table){
+	res = this.copy()
+
+	// Always create primary table
+	res.Header.HeaderStartLBA = 1
+	res.Header.PartitionsTableStartLBA = 2
+	res.Header.HeaderCopyStartLBA = size-1 // Last sector
+
+	partitionsTableSize := uint64(res.Header.PartitionEntrySize)*uint64(res.Header.PartitionsArrLen)
+	partitionSizeInSector := partitionsTableSize / uint64(res.SectorSize)
+	if partitionsTableSize % uint64(res.SectorSize) != 0 {
+		partitionSizeInSector++
+	}
+	res.Header.LastUsableLBA = size - 1 - partitionSizeInSector - 1 // header in last sector and partitions table
+
+	res.Header.CRC = res.Header.calcCRC()
+	return res
+}
+
+func (this Table) copy() (res Table) {
+	res = this
+
+	res.Header.TrailingBytes = make([]byte, len(this.Header.TrailingBytes))
+	copy(res.Header.TrailingBytes, this.Header.TrailingBytes)
+
+	res.Partitions = make([]Partition, len(this.Partitions))
+	copy(res.Partitions, this.Partitions)
+	for i := range this.Partitions {
+		res.Partitions[i].TrailingBytes = make([]byte, len(this.Partitions[i].TrailingBytes))
+		copy(res.Partitions[i].TrailingBytes, this.Partitions[i].TrailingBytes)
+	}
+
+	return res
 }
 
 func (this Table) calcPartitionsCRC() uint32 {
@@ -266,4 +344,57 @@ func mul(a, b int64) (res int64, ok bool) {
 	}
 	c := a * b
 	return c, c/b == a
+}
+
+func guidToString(byteGuid [16]byte) string {
+	byteToChars := func(b byte) (res []byte) {
+		res = make([]byte, 0, 2)
+		for i := 1; i >= 0; i-- {
+			switch b >> uint(4*i) & 0x0F {
+			case 0:
+				res = append(res, '0')
+			case 1:
+				res = append(res, '1')
+			case 2:
+				res = append(res, '2')
+			case 3:
+				res = append(res, '3')
+			case 4:
+				res = append(res, '4')
+			case 5:
+				res = append(res, '5')
+			case 6:
+				res = append(res, '6')
+			case 7:
+				res = append(res, '7')
+			case 8:
+				res = append(res, '8')
+			case 9:
+				res = append(res, '9')
+			case 10:
+				res = append(res, 'A')
+			case 11:
+				res = append(res, 'B')
+			case 12:
+				res = append(res, 'C')
+			case 13:
+				res = append(res, 'D')
+			case 14:
+				res = append(res, 'E')
+			case 15:
+				res = append(res, 'F')
+			}
+		}
+		return
+	}
+	s := make([]byte, 0, 36)
+	byteOrder := [...]int{3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15}
+	for _, i := range byteOrder {
+		if i == -1 {
+			s = append(s, '-')
+		} else {
+			s = append(s, byteToChars(byteGuid[i])...)
+		}
+	}
+	return string(s)
 }
