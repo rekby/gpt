@@ -504,3 +504,25 @@ func TestGuidToString(t *testing.T){
 		t.Errorf("Error guid: %v != %v", guidS,  "C12A7328-F81F-11D2-BA4B-00A0C93EC93B")
 	}
 }
+
+func TestStringToGuid(t *testing.T){
+	guid, err := stringToGuid( "C12A7328-F81F-11D2-BA4B-00A0C93EC93B")
+	if err != nil {
+		t.Error(err)
+	}
+	if guid != [...]byte{40, 115, 42, 193, 31, 248, 210, 17, 186, 75, 0, 160, 201, 62, 201, 59} {
+		t.Errorf("Bad result. Expected:\n%v\nResult:\n%v", [...]byte{40, 115, 42, 193, 31, 248, 210, 17, 186, 75, 0, 160, 201, 62, 201, 59}, guid )
+	}
+	if _, err := stringToGuid(""); err == nil {
+		t.Error("Must return error")
+	}
+	if _, err := stringToGuid("C12A7328-F81F-11D2-BA4B-00A0C93EC93BA"); err == nil {
+		t.Error("Must return error")
+	}
+	if _, err := stringToGuid("C12A7328-F81F-11D2-BA4B!00A0C93EC93B"); err == nil {
+		t.Error("Must return error")
+	}
+	if _, err := stringToGuid("C12A7328-F81F-11D2-BA4B-00A0C93EC93Z"); err == nil {
+		t.Error("Must return error")
+	}
+}
