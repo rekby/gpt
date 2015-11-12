@@ -31,21 +31,21 @@ var (
 
 // https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_table_header_.28LBA_1.29
 type Header struct {
-	Signature               [8]byte  // Offset  0. "EFI PART", 45h 46h 49h 20h 50h 41h 52h 54h
-	Revision                uint32   // Offset  8
-	Size                    uint32   // Offset 12
-	CRC                     uint32   // Offset 16. Autocalc when save Header.
-	Reserved                uint32   // Offset 20
-	HeaderStartLBA          uint64   // Offset 24
-	HeaderCopyStartLBA      uint64   // Offset 32
-	FirstUsableLBA          uint64   // Offset 40
-	LastUsableLBA           uint64   // Offset 48
-	DiskGUID                Guid // Offset 56
-	PartitionsTableStartLBA uint64   // Offset 72
-	PartitionsArrLen        uint32   // Offset 80
-	PartitionEntrySize      uint32   // Offset 84
-	PartitionsCRC           uint32   // Offset 88. Autocalc when save Table.
-	TrailingBytes           []byte   // Offset 92
+	Signature               [8]byte // Offset  0. "EFI PART", 45h 46h 49h 20h 50h 41h 52h 54h
+	Revision                uint32  // Offset  8
+	Size                    uint32  // Offset 12
+	CRC                     uint32  // Offset 16. Autocalc when save Header.
+	Reserved                uint32  // Offset 20
+	HeaderStartLBA          uint64  // Offset 24
+	HeaderCopyStartLBA      uint64  // Offset 32
+	FirstUsableLBA          uint64  // Offset 40
+	LastUsableLBA           uint64  // Offset 48
+	DiskGUID                Guid    // Offset 56
+	PartitionsTableStartLBA uint64  // Offset 72
+	PartitionsArrLen        uint32  // Offset 80
+	PartitionEntrySize      uint32  // Offset 84
+	PartitionsCRC           uint32  // Offset 88. Autocalc when save Table.
+	TrailingBytes           []byte  // Offset 92
 }
 
 // https://en.wikipedia.org/wiki/GUID_Partition_Table#Partition_entries
@@ -60,7 +60,7 @@ type Partition struct {
 }
 
 type Table struct {
-	SectorSize uint32 // in bytes
+	SectorSize uint64 // in bytes
 	Header     Header
 	Partitions []Partition
 }
@@ -70,7 +70,7 @@ type Table struct {
 //////////////////////////////////////////////
 
 // Have to set to start of Header. Usually LBA1 for primary header.
-func readHeader(reader io.Reader, sectorSize uint32) (res Header, err error) {
+func readHeader(reader io.Reader, sectorSize uint64) (res Header, err error) {
 	read := func(data interface{}) {
 		if err == nil {
 			err = binary.Read(reader, binary.LittleEndian, data)
@@ -98,7 +98,7 @@ func readHeader(reader io.Reader, sectorSize uint32) (res Header, err error) {
 	if string(res.Signature[:]) != "EFI PART" {
 		return res, fmt.Errorf("Bad GPT signature")
 	}
-	trailingBytes := make([]byte, sectorSize-standardHeaderSize)
+	trailingBytes := make([]byte, sectorSize-uint64(standardHeaderSize))
 	reader.Read(trailingBytes)
 	res.TrailingBytes = trailingBytes
 
@@ -214,7 +214,7 @@ func (this Partition) Name() string {
 
 // Read GPT partition
 // Have to set to first byte of GPT Header (usually start of second sector on disk)
-func ReadTable(reader io.ReadSeeker, SectorSize uint32) (table Table, err error) {
+func ReadTable(reader io.ReadSeeker, SectorSize uint64) (table Table, err error) {
 	table.SectorSize = SectorSize
 	table.Header, err = readHeader(reader, SectorSize)
 	if err != nil {
@@ -263,17 +263,17 @@ func (this Table) CreateOtherSideTable() (res Table) {
 
 // Create primary table for resized disk
 // size - in sectors
-func (this Table) CreateTableForNewDiskSize(size uint64)(res Table){
+func (this Table) CreateTableForNewDiskSize(size uint64) (res Table) {
 	res = this.copy()
 
 	// Always create primary table
 	res.Header.HeaderStartLBA = 1
 	res.Header.PartitionsTableStartLBA = 2
-	res.Header.HeaderCopyStartLBA = size-1 // Last sector
+	res.Header.HeaderCopyStartLBA = size - 1 // Last sector
 
-	partitionsTableSize := uint64(res.Header.PartitionEntrySize)*uint64(res.Header.PartitionsArrLen)
+	partitionsTableSize := uint64(res.Header.PartitionEntrySize) * uint64(res.Header.PartitionsArrLen)
 	partitionSizeInSector := partitionsTableSize / uint64(res.SectorSize)
-	if partitionsTableSize % uint64(res.SectorSize) != 0 {
+	if partitionsTableSize%uint64(res.SectorSize) != 0 {
 		partitionSizeInSector++
 	}
 	res.Header.LastUsableLBA = size - 1 - partitionSizeInSector - 1 // header in last sector and partitions table
@@ -402,21 +402,20 @@ func guidToString(byteGuid [16]byte) string {
 	return string(s)
 }
 
-
 // Use for create guid predefined values in snippet http://play.golang.org/p/uOd_WQtiwE
-func stringToGuid(guid string)(res [16]byte, err error){
+func stringToGuid(guid string) (res [16]byte, err error) {
 	byteOrder := [...]int{3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15}
-	if len(guid) != 36{
+	if len(guid) != 36 {
 		err = fmt.Errorf("BAD guid string length.")
 		return
 	}
 	guidByteNum := 0
-	for i := 0; i < len(guid); i+=2 {
+	for i := 0; i < len(guid); i += 2 {
 		if byteOrder[guidByteNum] == -1 {
 			if guid[i] == '-' {
 				i++
 				guidByteNum++
-				if i >= len(guid) + 1 {
+				if i >= len(guid)+1 {
 					err = fmt.Errorf("BAD guid format minus")
 					return
 				}
@@ -426,7 +425,7 @@ func stringToGuid(guid string)(res [16]byte, err error){
 			}
 		}
 
-		sub := guid[i:i+2]
+		sub := guid[i : i+2]
 		var bt byte
 		for pos, ch := range sub {
 			var shift uint
@@ -456,20 +455,20 @@ func stringToGuid(guid string)(res [16]byte, err error){
 				bt |= 8 << shift
 			case '9':
 				bt |= 9 << shift
-			case 'A','a':
+			case 'A', 'a':
 				bt |= 10 << shift
-			case 'B','b':
+			case 'B', 'b':
 				bt |= 11 << shift
-			case 'C','c':
+			case 'C', 'c':
 				bt |= 12 << shift
-			case 'D','d':
+			case 'D', 'd':
 				bt |= 13 << shift
-			case 'E','e':
+			case 'E', 'e':
 				bt |= 14 << shift
-			case 'F','f':
+			case 'F', 'f':
 				bt |= 15 << shift
 			default:
-				err = fmt.Errorf("BAD guid char: ", i + pos, ch)
+				err = fmt.Errorf("BAD guid char: ", i+pos, ch)
 				return
 			}
 		}
