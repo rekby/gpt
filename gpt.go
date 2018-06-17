@@ -202,7 +202,12 @@ func (this Partition) IsEmpty() bool {
 func (this Partition) Name() string {
 	chars := make([]uint16, 0, 36)
 	for i := 0; i < len(this.PartNameUTF16); i += 2 {
-		chars = append(chars, uint16(this.PartNameUTF16[i])+uint16(this.PartNameUTF16[i+1])<<8)
+		byte1 := this.PartNameUTF16[i]
+		byte2 := this.PartNameUTF16[i+1]
+		if byte1 == 0 && byte2 == 0 {
+			break
+		}
+		chars = append(chars, uint16(byte1)+uint16(byte2)<<8)
 	}
 	runes := utf16.Decode(chars)
 	return string(runes)
