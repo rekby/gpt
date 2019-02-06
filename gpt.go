@@ -473,7 +473,7 @@ func stringToGuid(guid string) (res [16]byte, err error) {
 			case 'F', 'f':
 				bt |= 15 << shift
 			default:
-				err = fmt.Errorf("BAD guid char: ", i+pos, ch)
+				err = fmt.Errorf("BAD guid char at pos %d: '%c'", i+pos, ch)
 				return
 			}
 		}
