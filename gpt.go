@@ -408,7 +408,7 @@ func guidToString(byteGuid [16]byte) string {
 }
 
 // Use for create guid predefined values in snippet http://play.golang.org/p/uOd_WQtiwE
-func stringToGuid(guid string) (res [16]byte, err error) {
+func StringToGuid(guid string) (res [16]byte, err error) {
 	byteOrder := [...]int{3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15}
 	if len(guid) != 36 {
 		err = fmt.Errorf("BAD guid string length.")
