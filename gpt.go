@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"strconv"
 	"unicode/utf16"
 )
 
@@ -432,50 +433,18 @@ func StringToGuid(guid string) (res [16]byte, err error) {
 
 		sub := guid[i : i+2]
 		var bt byte
+		var val uint64
 		for pos, ch := range sub {
-			var shift uint
+			var shift uint = 0
 			if pos == 0 {
 				shift = 4
-			} else {
-				shift = 0
 			}
-			switch ch {
-			case '0':
-				bt |= 0 << shift
-			case '1':
-				bt |= 1 << shift
-			case '2':
-				bt |= 2 << shift
-			case '3':
-				bt |= 3 << shift
-			case '4':
-				bt |= 4 << shift
-			case '5':
-				bt |= 5 << shift
-			case '6':
-				bt |= 6 << shift
-			case '7':
-				bt |= 7 << shift
-			case '8':
-				bt |= 8 << shift
-			case '9':
-				bt |= 9 << shift
-			case 'A', 'a':
-				bt |= 10 << shift
-			case 'B', 'b':
-				bt |= 11 << shift
-			case 'C', 'c':
-				bt |= 12 << shift
-			case 'D', 'd':
-				bt |= 13 << shift
-			case 'E', 'e':
-				bt |= 14 << shift
-			case 'F', 'f':
-				bt |= 15 << shift
-			default:
+			val, err = strconv.ParseUint(string(ch), 16, 8)
+			if err != nil {
 				err = fmt.Errorf("BAD guid char at pos %d: '%c'", i+pos, ch)
 				return
 			}
+			bt |= byte(val) << shift
 		}
 		res[byteOrder[guidByteNum]] = bt
 		guidByteNum++
