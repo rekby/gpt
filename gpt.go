@@ -334,81 +334,8 @@ func (this Table) Write(writer io.WriteSeeker) (err error) {
 	return
 }
 
-//////////////////////////////////////////////
-//////////////// INTERNALS ///////////////////
-//////////////////////////////////////////////
-
-// Multiply two int64 numbers with overflow check
-// Algorithm from https://gist.github.com/areed/85d3614a58400e417027
-func mul(a, b int64) (res int64, ok bool) {
-	const mostPositive = 1<<63 - 1
-	const mostNegative = -(mostPositive + 1)
-
-	if a == 0 || b == 0 || a == 1 || b == 1 {
-		return a * b, true
-	}
-	if a == mostNegative || b == mostNegative {
-		return a * b, false
-	}
-	c := a * b
-	return c, c/b == a
-}
-
-func guidToString(byteGuid [16]byte) string {
-	byteToChars := func(b byte) (res []byte) {
-		res = make([]byte, 0, 2)
-		for i := 1; i >= 0; i-- {
-			switch b >> uint(4*i) & 0x0F {
-			case 0:
-				res = append(res, '0')
-			case 1:
-				res = append(res, '1')
-			case 2:
-				res = append(res, '2')
-			case 3:
-				res = append(res, '3')
-			case 4:
-				res = append(res, '4')
-			case 5:
-				res = append(res, '5')
-			case 6:
-				res = append(res, '6')
-			case 7:
-				res = append(res, '7')
-			case 8:
-				res = append(res, '8')
-			case 9:
-				res = append(res, '9')
-			case 10:
-				res = append(res, 'A')
-			case 11:
-				res = append(res, 'B')
-			case 12:
-				res = append(res, 'C')
-			case 13:
-				res = append(res, 'D')
-			case 14:
-				res = append(res, 'E')
-			case 15:
-				res = append(res, 'F')
-			}
-		}
-		return
-	}
-	s := make([]byte, 0, 36)
-	byteOrder := [...]int{3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15}
-	for _, i := range byteOrder {
-		if i == -1 {
-			s = append(s, '-')
-		} else {
-			s = append(s, byteToChars(byteGuid[i])...)
-		}
-	}
-	return string(s)
-}
-
 // Use for create guid predefined values in snippet http://play.golang.org/p/uOd_WQtiwE
-func stringToGuid(guid string) (res [16]byte, err error) {
+func StringToGuid(guid string) (res [16]byte, err error) {
 	byteOrder := [...]int{3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15}
 	if len(guid) != 36 {
 		err = fmt.Errorf("BAD guid string length.")
@@ -481,4 +408,77 @@ func stringToGuid(guid string) (res [16]byte, err error) {
 		guidByteNum++
 	}
 	return res, nil
+}
+
+//////////////////////////////////////////////
+//////////////// INTERNALS ///////////////////
+//////////////////////////////////////////////
+
+// Multiply two int64 numbers with overflow check
+// Algorithm from https://gist.github.com/areed/85d3614a58400e417027
+func mul(a, b int64) (res int64, ok bool) {
+	const mostPositive = 1<<63 - 1
+	const mostNegative = -(mostPositive + 1)
+
+	if a == 0 || b == 0 || a == 1 || b == 1 {
+		return a * b, true
+	}
+	if a == mostNegative || b == mostNegative {
+		return a * b, false
+	}
+	c := a * b
+	return c, c/b == a
+}
+
+func guidToString(byteGuid [16]byte) string {
+	byteToChars := func(b byte) (res []byte) {
+		res = make([]byte, 0, 2)
+		for i := 1; i >= 0; i-- {
+			switch b >> uint(4*i) & 0x0F {
+			case 0:
+				res = append(res, '0')
+			case 1:
+				res = append(res, '1')
+			case 2:
+				res = append(res, '2')
+			case 3:
+				res = append(res, '3')
+			case 4:
+				res = append(res, '4')
+			case 5:
+				res = append(res, '5')
+			case 6:
+				res = append(res, '6')
+			case 7:
+				res = append(res, '7')
+			case 8:
+				res = append(res, '8')
+			case 9:
+				res = append(res, '9')
+			case 10:
+				res = append(res, 'A')
+			case 11:
+				res = append(res, 'B')
+			case 12:
+				res = append(res, 'C')
+			case 13:
+				res = append(res, 'D')
+			case 14:
+				res = append(res, 'E')
+			case 15:
+				res = append(res, 'F')
+			}
+		}
+		return
+	}
+	s := make([]byte, 0, 36)
+	byteOrder := [...]int{3, 2, 1, 0, -1, 5, 4, -1, 7, 6, -1, 8, 9, -1, 10, 11, 12, 13, 14, 15}
+	for _, i := range byteOrder {
+		if i == -1 {
+			s = append(s, '-')
+		} else {
+			s = append(s, byteToChars(byteGuid[i])...)
+		}
+	}
+	return string(s)
 }
