@@ -16,13 +16,13 @@ type Flags [8]byte
 type Guid [16]byte
 
 func (this Guid) String() string {
-	return guidToString(this)
+	return GuidToString(this)
 }
 
 type PartType Guid
 
 func (this PartType) String() string {
-	return guidToString(this)
+	return GuidToString(this)
 }
 
 var (
@@ -410,27 +410,7 @@ func StringToGuid(guid string) (res [16]byte, err error) {
 	return res, nil
 }
 
-//////////////////////////////////////////////
-//////////////// INTERNALS ///////////////////
-//////////////////////////////////////////////
-
-// Multiply two int64 numbers with overflow check
-// Algorithm from https://gist.github.com/areed/85d3614a58400e417027
-func mul(a, b int64) (res int64, ok bool) {
-	const mostPositive = 1<<63 - 1
-	const mostNegative = -(mostPositive + 1)
-
-	if a == 0 || b == 0 || a == 1 || b == 1 {
-		return a * b, true
-	}
-	if a == mostNegative || b == mostNegative {
-		return a * b, false
-	}
-	c := a * b
-	return c, c/b == a
-}
-
-func guidToString(byteGuid [16]byte) string {
+func GuidToString(byteGuid [16]byte) string {
 	byteToChars := func(b byte) (res []byte) {
 		res = make([]byte, 0, 2)
 		for i := 1; i >= 0; i-- {
@@ -481,4 +461,24 @@ func guidToString(byteGuid [16]byte) string {
 		}
 	}
 	return string(s)
+}
+
+//////////////////////////////////////////////
+//////////////// INTERNALS ///////////////////
+//////////////////////////////////////////////
+
+// Multiply two int64 numbers with overflow check
+// Algorithm from https://gist.github.com/areed/85d3614a58400e417027
+func mul(a, b int64) (res int64, ok bool) {
+	const mostPositive = 1<<63 - 1
+	const mostNegative = -(mostPositive + 1)
+
+	if a == 0 || b == 0 || a == 1 || b == 1 {
+		return a * b, true
+	}
+	if a == mostNegative || b == mostNegative {
+		return a * b, false
+	}
+	c := a * b
+	return c, c/b == a
 }

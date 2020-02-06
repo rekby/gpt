@@ -497,7 +497,7 @@ func TestTableNewSize(t *testing.T) {
 
 func TestGuidToString(t *testing.T) {
 	guid := [...]byte{40, 115, 42, 193, 31, 248, 210, 17, 186, 75, 0, 160, 201, 62, 201, 59}
-	guidS := guidToString(guid)
+	guidS := GuidToString(guid)
 	if guidS != "C12A7328-F81F-11D2-BA4B-00A0C93EC93B" {
 		t.Errorf("Error guid: %v != %v", guidS, "C12A7328-F81F-11D2-BA4B-00A0C93EC93B")
 	}
