@@ -410,6 +410,34 @@ func StringToGuid(guid string) (res [16]byte, err error) {
 	return res, nil
 }
 
+// NewTable - return a valid empty Table for given sectorSize and diskSize
+//    Note that a Protective MBR is needed for lots of software to read the GPT table.
+func NewTable(sectorSize uint64, diskSize uint64, diskGuid Guid) Table {
+	// CreateTableForNewdiskSize will update HeaderCopyStartLBA, LastUsableLBA, and CRC
+	numParts := 128
+	return Table{
+		SectorSize: sectorSize,
+		Header: Header{
+			Signature:               [8]byte{0x45, 0x46, 0x49, 0x20, 0x50, 0x41, 0x52, 0x54},
+			Revision:                0x10000,
+			Size:                    standardHeaderSize,
+			CRC:                     0,
+			Reserved:                0,
+			HeaderStartLBA:          1,
+			HeaderCopyStartLBA:      0,
+			FirstUsableLBA:          34,
+			LastUsableLBA:           0,
+			DiskGUID:                diskGuid,
+			PartitionsTableStartLBA: 2,
+			PartitionsArrLen:        uint32(numParts),
+			PartitionEntrySize:      uint32(standardPartitionEntrySize),
+			PartitionsCRC:           0x0,
+			TrailingBytes:           make([]byte, sectorSize-uint64(standardHeaderSize)),
+		},
+		Partitions: make([]Partition, numParts),
+	}.CreateTableForNewDiskSize(diskSize / sectorSize)
+}
+
 //////////////////////////////////////////////
 //////////////// INTERNALS ///////////////////
 //////////////////////////////////////////////
