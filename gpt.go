@@ -7,6 +7,8 @@ import (
 	"hash/crc32"
 	"io"
 	"unicode/utf16"
+
+	"github.com/google/uuid"
 )
 
 const standardHeaderSize = 92          // Size of standard GPT-header in bytes
@@ -410,13 +412,30 @@ func StringToGuid(guid string) (res [16]byte, err error) {
 	return res, nil
 }
 
+// NewTableArgs - arguments NewTable creation.
+type NewTableArgs struct {
+	SectorSize uint64
+	DiskGuid   Guid
+}
+
 // NewTable - return a valid empty Table for given sectorSize and diskSize
 //    Note that a Protective MBR is needed for lots of software to read the GPT table.
-func NewTable(sectorSize uint64, diskSize uint64, diskGuid Guid) Table {
+func NewTable(diskSize uint64, args *NewTableArgs) Table {
 	// CreateTableForNewdiskSize will update HeaderCopyStartLBA, LastUsableLBA, and CRC
+	if args == nil {
+		args = &NewTableArgs{}
+	}
+	if args.SectorSize == 0 {
+		args.SectorSize = uint64(512)
+	}
+	var emptyGuid Guid
+	if args.DiskGuid == emptyGuid {
+		args.DiskGuid = Guid(uuid.New())
+	}
+
 	numParts := 128
 	return Table{
-		SectorSize: sectorSize,
+		SectorSize: args.SectorSize,
 		Header: Header{
 			Signature:               [8]byte{0x45, 0x46, 0x49, 0x20, 0x50, 0x41, 0x52, 0x54},
 			Revision:                0x10000,
@@ -427,15 +446,15 @@ func NewTable(sectorSize uint64, diskSize uint64, diskGuid Guid) Table {
 			HeaderCopyStartLBA:      0,
 			FirstUsableLBA:          34,
 			LastUsableLBA:           0,
-			DiskGUID:                diskGuid,
+			DiskGUID:                args.DiskGuid,
 			PartitionsTableStartLBA: 2,
 			PartitionsArrLen:        uint32(numParts),
 			PartitionEntrySize:      uint32(standardPartitionEntrySize),
 			PartitionsCRC:           0x0,
-			TrailingBytes:           make([]byte, sectorSize-uint64(standardHeaderSize)),
+			TrailingBytes:           make([]byte, args.SectorSize-uint64(standardHeaderSize)),
 		},
 		Partitions: make([]Partition, numParts),
-	}.CreateTableForNewDiskSize(diskSize / sectorSize)
+	}.CreateTableForNewDiskSize(diskSize / args.SectorSize)
 }
 
 //////////////////////////////////////////////

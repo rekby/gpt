@@ -199,7 +199,7 @@ func TestNewTable(t *testing.T) {
 	ssize := 512
 	diskSize := uint64(250000384) // round 512 sectors closest to 250gb
 	numSectors := diskSize / uint64(ssize)
-	table := NewTable(uint64(ssize), diskSize, guid)
+	table := NewTable(diskSize, &NewTableArgs{uint64(ssize), guid})
 
 	h := table.Header
 	if h.DiskGUID != guid {
