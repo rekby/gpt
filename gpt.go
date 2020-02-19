@@ -7,6 +7,8 @@ import (
 	"hash/crc32"
 	"io"
 	"unicode/utf16"
+
+	"github.com/google/uuid"
 )
 
 const standardHeaderSize = 92          // Size of standard GPT-header in bytes
@@ -408,6 +410,58 @@ func StringToGuid(guid string) (res [16]byte, err error) {
 		guidByteNum++
 	}
 	return res, nil
+}
+
+// NewTableArgs - arguments NewTable creation.
+type NewTableArgs struct {
+	SectorSize uint64
+	DiskGuid   Guid
+}
+
+// NewTable - return a valid empty Table for given sectorSize and diskSize
+//    Note that a Protective MBR is needed for lots of software to read the GPT table.
+func NewTable(diskSize uint64, args *NewTableArgs) Table {
+	// CreateTableForNewdiskSize will update HeaderCopyStartLBA, LastUsableLBA, and CRC
+	if args == nil {
+		args = &NewTableArgs{}
+	}
+	if args.SectorSize == 0 {
+		args.SectorSize = uint64(512)
+	}
+	var emptyGuid Guid
+	if args.DiskGuid == emptyGuid {
+		args.DiskGuid = Guid(uuid.New())
+	}
+
+	ptStartLBA := uint64(2)
+	numParts := 128
+	partitionsTableSize := uint64(standardPartitionEntrySize) * uint64(numParts)
+	partitionSizeInSector := partitionsTableSize / uint64(args.SectorSize)
+	if partitionsTableSize%uint64(args.SectorSize) != 0 {
+		partitionSizeInSector++
+	}
+
+	return Table{
+		SectorSize: args.SectorSize,
+		Header: Header{
+			Signature:               [8]byte{0x45, 0x46, 0x49, 0x20, 0x50, 0x41, 0x52, 0x54},
+			Revision:                0x10000,
+			Size:                    standardHeaderSize,
+			CRC:                     0,
+			Reserved:                0,
+			HeaderStartLBA:          1,
+			HeaderCopyStartLBA:      0,
+			FirstUsableLBA:          ptStartLBA + partitionSizeInSector,
+			LastUsableLBA:           0,
+			DiskGUID:                args.DiskGuid,
+			PartitionsTableStartLBA: ptStartLBA,
+			PartitionsArrLen:        uint32(numParts),
+			PartitionEntrySize:      uint32(standardPartitionEntrySize),
+			PartitionsCRC:           0x0,
+			TrailingBytes:           make([]byte, args.SectorSize-uint64(standardHeaderSize)),
+		},
+		Partitions: make([]Partition, numParts),
+	}.CreateTableForNewDiskSize(diskSize / args.SectorSize)
 }
 
 //////////////////////////////////////////////
