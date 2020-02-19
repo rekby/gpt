@@ -2,13 +2,12 @@ package gpt
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"unicode/utf16"
-
-	"github.com/google/uuid"
 )
 
 const standardHeaderSize = 92          // Size of standard GPT-header in bytes
@@ -430,7 +429,7 @@ func NewTable(diskSize uint64, args *NewTableArgs) Table {
 	}
 	var emptyGuid Guid
 	if args.DiskGuid == emptyGuid {
-		args.DiskGuid = Guid(uuid.New())
+		args.DiskGuid = NewGUID()
 	}
 
 	ptStartLBA := uint64(2)
@@ -535,4 +534,17 @@ func guidToString(byteGuid [16]byte) string {
 		}
 	}
 	return string(s)
+}
+
+func NewGUID() Guid {
+	var res Guid
+	_, err := rand.Read(res[:])
+	if err != nil {
+		panic(err)
+	}
+
+	// set predefined bits for UUIDv4
+	res[6] = (res[6] & 0x0f) | 0x40 // Version 4
+	res[8] = (res[8] & 0x3f) | 0x80 // Variant 10
+	return res
 }
