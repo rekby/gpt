@@ -433,7 +433,14 @@ func NewTable(diskSize uint64, args *NewTableArgs) Table {
 		args.DiskGuid = Guid(uuid.New())
 	}
 
+	ptStartLBA := uint64(2)
 	numParts := 128
+	partitionsTableSize := uint64(standardPartitionEntrySize) * uint64(numParts)
+	partitionSizeInSector := partitionsTableSize / uint64(args.SectorSize)
+	if partitionsTableSize%uint64(args.SectorSize) != 0 {
+		partitionSizeInSector++
+	}
+
 	return Table{
 		SectorSize: args.SectorSize,
 		Header: Header{
@@ -444,10 +451,10 @@ func NewTable(diskSize uint64, args *NewTableArgs) Table {
 			Reserved:                0,
 			HeaderStartLBA:          1,
 			HeaderCopyStartLBA:      0,
-			FirstUsableLBA:          34,
+			FirstUsableLBA:          ptStartLBA + partitionSizeInSector,
 			LastUsableLBA:           0,
 			DiskGUID:                args.DiskGuid,
-			PartitionsTableStartLBA: 2,
+			PartitionsTableStartLBA: ptStartLBA,
 			PartitionsArrLen:        uint32(numParts),
 			PartitionEntrySize:      uint32(standardPartitionEntrySize),
 			PartitionsCRC:           0x0,

@@ -196,11 +196,15 @@ func TestReadWriteTable(t *testing.T) {
 
 func TestNewTable(t *testing.T) {
 	guid := Guid{0xc5, 0x7f, 0x7e, 0x46, 0x36, 0x2b, 0x4e, 0x60, 0x9a, 0xa9, 0xa6, 0xe9, 0xdd, 0x85, 0x94, 0xa6}
-	ssize := 512
-	diskSize := uint64(250000384) // round 512 sectors closest to 250gb
+	ssize := 4096
+	diskSize := uint64(ssize * 1024 * 1024) // round 4TiB
 	numSectors := diskSize / uint64(ssize)
-	table := NewTable(diskSize, &NewTableArgs{uint64(ssize), guid})
 
+	// sector size 4096 means header+ptdata fits in 5 sectors (33 for size 512)
+	headerSizePlusPartData := uint64(5)
+	expectedLastLBA := uint64(numSectors - headerSizePlusPartData - 1)
+
+	table := NewTable(diskSize, &NewTableArgs{uint64(ssize), guid})
 	h := table.Header
 	if h.DiskGUID != guid {
 		t.Errorf("found DiskGUID %v != %v", guid, h.DiskGUID)
@@ -222,11 +226,11 @@ func TestNewTable(t *testing.T) {
 	if h.HeaderCopyStartLBA != numSectors-1 {
 		t.Error("Other LBA", h.HeaderCopyStartLBA, numSectors-1)
 	}
-	if h.FirstUsableLBA != 34 {
+	if h.FirstUsableLBA != uint64(headerSizePlusPartData+1) {
 		t.Error("FirstUsable: ", h.FirstUsableLBA)
 	}
-	if h.LastUsableLBA != numSectors-34 {
-		t.Errorf("LastUsable: expected %d found %d", numSectors-34, h.LastUsableLBA)
+	if h.LastUsableLBA != expectedLastLBA {
+		t.Errorf("LastUsable: expected %d found %d", expectedLastLBA, h.LastUsableLBA)
 	}
 	if h.PartitionsTableStartLBA != 2 {
 		t.Error("Start partition entries: ", h.PartitionsTableStartLBA)
@@ -241,6 +245,59 @@ func TestNewTable(t *testing.T) {
 		t.Error("Partitions CRC", h.PartitionsCRC)
 	}
 
+}
+
+func TestNewTableNil(t *testing.T) {
+	emptyGuid := Guid{}
+	ssize := 512
+	diskSize := uint64(250000384) // round 512 sectors closest to 250gb
+	numSectors := diskSize / uint64(ssize)
+
+	// sector size 512 means header+ptdata fits in 33 sectors.
+	headerSizePlusPartData := uint64(33)
+	expectedLastLBA := uint64(numSectors - headerSizePlusPartData - 1)
+
+	table := NewTable(diskSize, nil)
+
+	h := table.Header
+	if h.DiskGUID == emptyGuid {
+		t.Errorf("DiskGUID did not get generated. still empty")
+	}
+
+	if len(h.TrailingBytes) != ssize-standardHeaderSize {
+		t.Errorf("Found TralingBytes len %d expected %d", len(h.TrailingBytes), ssize-standardHeaderSize)
+	}
+
+	if h.CRC != h.calcCRC() {
+		t.Error("CRC")
+	}
+	if h.Reserved != 0 {
+		t.Error("Reserved")
+	}
+	if h.HeaderStartLBA != 1 {
+		t.Error("CurrentLBA", h.HeaderStartLBA)
+	}
+	if h.HeaderCopyStartLBA != numSectors-1 {
+		t.Error("Other LBA", h.HeaderCopyStartLBA, numSectors-1)
+	}
+	if h.FirstUsableLBA != headerSizePlusPartData+1 {
+		t.Error("FirstUsable: ", h.FirstUsableLBA)
+	}
+	if h.LastUsableLBA != expectedLastLBA {
+		t.Errorf("LastUsable: expected %d found %d", expectedLastLBA, h.LastUsableLBA)
+	}
+	if h.PartitionsTableStartLBA != 2 {
+		t.Error("Start partition entries: ", h.PartitionsTableStartLBA)
+	}
+	if h.PartitionsArrLen != 128 {
+		t.Error("Partition arr len", h.PartitionsArrLen)
+	}
+	if h.PartitionEntrySize != 128 {
+		t.Error("Partition entry size:", h.PartitionEntrySize)
+	}
+	if h.PartitionsCRC != 0 {
+		t.Error("Partitions CRC", h.PartitionsCRC)
+	}
 }
 
 func TestTableCreateOtherSide(t *testing.T) {
