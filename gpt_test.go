@@ -435,7 +435,7 @@ func TestTableCopy(t *testing.T) {
 	if t2.Header.DiskGUID != t1.Header.DiskGUID {
 		t.Error("disk guid")
 	}
-	if t2.Header.PartitionsTableStartLBA != t2.Header.PartitionsTableStartLBA {
+	if t2.Header.PartitionsTableStartLBA != t1.Header.PartitionsTableStartLBA {
 		t.Error("partitions table start")
 	}
 	if t2.Header.PartitionsArrLen != t1.Header.PartitionsArrLen {
